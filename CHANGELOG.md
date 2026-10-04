@@ -12,6 +12,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Advisor calls now use `ctx.modelRegistry.streamSimple()` to preserve extension-composed provider wrappers and runtime behavior (#35).
 - Advisor invocation guidelines no longer replace the whole system prompt, so prompt sections from other extensions, such as the list of MCP servers, still reach the model.
 - Braces Vulnerability patched (CVE-2026-93687)
 

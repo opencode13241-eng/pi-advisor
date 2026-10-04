@@ -334,4 +334,78 @@ describe("model stream", () => {
     );
     expect(empty.text).toBe("");
   });
+
+  test("binds ctx.modelRegistry.streamSimple when available", async () => {
+    let streamSimpleCalled = false;
+    const ctx = asExtensionContext({
+      modelRegistry: {
+        find: () => model,
+        getApiKeyAndHeaders: () =>
+          Promise.resolve({ apiKey: "secret", ok: true }),
+        streamSimple: () => {
+          streamSimpleCalled = true;
+          return fakeStream([], assistant("from streamSimple"))();
+        },
+      },
+    });
+    const resolved = await resolveConfiguredModel(
+      ctx,
+      "provider/model",
+      "Advisor"
+    );
+    expect(resolved.streamSimple).toBeDefined();
+    const result = await collectTextStream(resolved, {
+      messages: [],
+      systemPrompt: "system",
+    });
+    expect(streamSimpleCalled).toBe(true);
+    expect(result.text).toBe("from streamSimple");
+  });
+
+  test("uses ctx.modelRegistry.streamSimple for advisor calls rather than bypassing to compat stream", async () => {
+    let capturedOptions: any;
+    let streamSimpleModel: any;
+    let streamSimpleContext: any;
+    const mockStreamSimple = (m: any, c: any, opts: any) => {
+      streamSimpleModel = m;
+      streamSimpleContext = c;
+      capturedOptions = opts;
+      return fakeStream(
+        [{ delta: "advice", type: "text_delta" }],
+        assistant("advice from composed provider")
+      )(m, c, opts);
+    };
+
+    const ctx = asExtensionContext({
+      modelRegistry: {
+        find: () => model,
+        getApiKeyAndHeaders: () => Promise.resolve({ apiKey: "key", ok: true }),
+        streamSimple: mockStreamSimple,
+      },
+    });
+
+    const resolved = await resolveConfiguredModel(
+      ctx,
+      "provider/model",
+      "Advisor"
+    );
+    const result = await collectTextStream(resolved, {
+      messages: [
+        { content: [{ text: "hi", type: "text" }], role: "user", timestamp: 1 },
+      ],
+      reasoning: "low",
+      systemPrompt: "sys",
+    });
+
+    expect(streamSimpleModel).toBe(model);
+    expect(streamSimpleContext).toEqual({
+      messages: [
+        { content: [{ text: "hi", type: "text" }], role: "user", timestamp: 1 },
+      ],
+      systemPrompt: "sys",
+    });
+    expect(capturedOptions.apiKey).toBe("key");
+    expect(capturedOptions.reasoning).toBe("low");
+    expect(result.text).toBe("advice from composed provider");
+  });
 });

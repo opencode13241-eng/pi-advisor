@@ -1866,7 +1866,8 @@ var resolveConfiguredModel = async (ctx, ref, label) => {
     env: auth.env,
     headers: auth.headers,
     model,
-    ref
+    ref,
+    streamSimple: ctx.modelRegistry?.streamSimple ? ctx.modelRegistry.streamSimple.bind(ctx.modelRegistry) : undefined
   };
 };
 var ADVISOR_STREAM_UPDATE_INTERVAL_MS = 90;
@@ -1949,7 +1950,7 @@ var createCoalescedUpdate = (publish, intervalMs = ADVISOR_STREAM_UPDATE_INTERVA
     }
   };
 };
-var collectTextStream = async (resolved, options, streamModel = stream) => {
+var collectTextStream = async (resolved, options, streamModel = resolved.streamSimple ?? stream) => {
   let thinking = "";
   let text = "";
   const streamOptions = {

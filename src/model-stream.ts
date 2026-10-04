@@ -2,8 +2,11 @@ import { stream } from "@earendil-works/pi-ai/compat";
 import type {
   Api,
   AssistantMessage,
+  AssistantMessageEventStream,
+  Context,
   Message,
   Model,
+  SimpleStreamOptions,
 } from "@earendil-works/pi-ai/compat";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
@@ -15,6 +18,11 @@ export interface ResolvedConfiguredModel {
   headers?: Record<string, string | null>;
   model: Model<Api>;
   ref: string;
+  streamSimple?: (
+    model: Model<Api>,
+    context: Context,
+    options?: SimpleStreamOptions
+  ) => AssistantMessageEventStream;
 }
 
 export const resolveConfiguredModel = async (
@@ -44,6 +52,9 @@ export const resolveConfiguredModel = async (
     headers: auth.headers,
     model,
     ref,
+    streamSimple: ctx.modelRegistry?.streamSimple
+      ? ctx.modelRegistry.streamSimple.bind(ctx.modelRegistry)
+      : undefined,
   };
 };
 
@@ -182,21 +193,27 @@ export const createCoalescedUpdate = <T>(
 export const collectTextStream = async (
   resolved: ResolvedConfiguredModel,
   options: CollectTextStreamOptions,
-  streamModel: typeof stream = stream
+  streamModel:
+    | typeof stream
+    | ((
+        model: Model<Api>,
+        context: Context,
+        options?: SimpleStreamOptions
+      ) => AssistantMessageEventStream) = resolved.streamSimple ?? stream
 ): Promise<CollectedTextStream> => {
   let thinking = "";
   let text = "";
-  const streamOptions: Parameters<typeof streamModel>[2] = {
+  const streamOptions: SimpleStreamOptions & { reasoningEffort?: unknown } = {
     apiKey: resolved.apiKey,
     env: resolved.env,
     headers: resolved.headers,
-    // SAFETY: stream() models the provider-facing reasoning field as never; options.reasoning is the Pi-facing effort string.
-    reasoning: options.reasoning as never,
+    // SAFETY: options.reasoning is a thinking level effort string passed to stream options.
+    reasoning: options.reasoning as SimpleStreamOptions["reasoning"],
     signal: options.signal,
   };
   if (options.reasoning !== undefined) {
     // SAFETY: reasoningEffort takes the same effort string; kept absent when reasoning is unset.
-    streamOptions.reasoningEffort = options.reasoning as never;
+    streamOptions.reasoningEffort = options.reasoning;
   }
   const eventStream = streamModel(
     resolved.model,
